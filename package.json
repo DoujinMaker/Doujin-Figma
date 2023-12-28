@@ -11,6 +11,7 @@
   "license": "",
   "devDependencies": {
     "@figma/plugin-typings": "*",
+    "@types/node": "^20.10.5",
     "typescript": "*"
   }
 }

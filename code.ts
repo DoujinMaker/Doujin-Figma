@@ -1,34 +1,120 @@
-// This plugin will open a window to prompt the user to enter a number, and
-// it will then create that many rectangles on the screen.
+figma.showUI(__html__, { width: 320, height: 720 });
 
-// This file holds the main code for plugins. Code in this file has access to
-// the *figma document* via the figma global object.
-// You can access browser APIs in the <script> tag inside "ui.html" which has a
-// full browser environment (See https://www.figma.com/plugin-docs/how-plugins-run).
+const FRAME_TYPE_NAME = "FRAME";
 
-// This shows the HTML page in "ui.html".
-figma.showUI(__html__);
-
-// Calls to "parent.postMessage" from within the HTML page will trigger this
-// callback. The callback will be passed the "pluginMessage" property of the
-// posted message.
-figma.ui.onmessage = msg => {
-  // One way of distinguishing between different types of messages sent from
-  // your HTML page is to use an object with a "type" property like this.
-  if (msg.type === 'create-rectangles') {
-    const nodes: SceneNode[] = [];
-    for (let i = 0; i < msg.count; i++) {
-      const rect = figma.createRectangle();
-      rect.x = i * 150;
-      rect.fills = [{type: 'SOLID', color: {r: 1, g: 0.5, b: 0}}];
-      figma.currentPage.appendChild(rect);
-      nodes.push(rect);
-    }
-    figma.currentPage.selection = nodes;
-    figma.viewport.scrollAndZoomIntoView(nodes);
+class Cache{
+  type: string = "";
+  url: string ="";
+  api_key: string = "";
+}
+class Settings extends Cache{
+  static getInstance(cache: Cache) {
+    let settings = new Settings();
+    const merge = Object.assign({}, settings, cache);
+    Object.assign(settings, merge);
+    return settings;
   }
 
-  // Make sure to close the plugin when you're done. Otherwise the plugin will
-  // keep running, which shows the cancel button at the bottom of the screen.
-  figma.closePlugin();
-};
+  async save() {
+    await figma.clientStorage.setAsync("settings", JSON.stringify(this));
+  }
+  async load() {
+    try{
+      let settings_str = await figma.clientStorage.getAsync("settings");
+      if (settings_str) {
+        let cached_settings = JSON.parse(settings_str);
+        Object.assign(this, cached_settings);
+      }
+    }catch(e: any){
+      if(debugMode())console.log(e.message)
+    }
+  }
+  toJson() {
+    return JSON.stringify(this);
+  }
+  getHeaders() {
+    return { 'Content-Type': 'application/json', "Authorization": this.api_key };
+  }
+}
+let settings = new Settings();
+let cache = new Cache();
+async function initialize() {
+  await settings.load();
+  const merge = Object.assign({}, cache, settings);
+  Object.assign(cache, merge)
+  settings = Settings.getInstance(cache);
+  const selection = figma.currentPage.selection;
+  console.log(selection);
+  if (debugMode()) console.log("initialized");
+  figma.ui.postMessage({ type: 'sync_settings', settings: settings.toJson() });
+}
+initialize()
+
+const figmaUiMessageHandler=async (msg:any)=>{
+  let ui_cache:Cache = JSON.parse(msg.cache);
+  const merge = Object.assign({}, cache, ui_cache);
+  Object.assign(cache, merge);
+  const type = msg.type;
+  try{
+    switch (type) {
+      case "save_settings":
+        settings = Settings.getInstance(cache);
+        await settings.save();
+        if (debugMode()) console.log("Settings saved");
+        figma.ui.postMessage({ type: 'saved_settings', settings: JSON.stringify(settings) });
+        break;
+        case "focus_selected_items":
+          if (figma.currentPage.selection.length > 0)
+            figma.viewport.scrollAndZoomIntoView(figma.currentPage.selection);
+          else
+            figma.notify("Please select items to focus");
+          break;
+      case "focus_frame":
+        if (figma.currentPage.selection.length > 0){
+          let frame=selectFrameFromSelection(figma.currentPage.selection);
+          if(frame){
+            figma.viewport.scrollAndZoomIntoView([frame]);
+            figma.currentPage.selection = [frame];
+          }
+        }else{
+          figma.notify("Please select items that have frame to focus");
+        }
+        break;
+    }
+  }catch(e: any){
+    if(debugMode())console.log(e)
+    figma.ui.postMessage({ type: 'error', message: e.message });
+  }
+}
+figma.ui.onmessage = figmaUiMessageHandler;
+
+function debugMode(){
+  return true;
+}
+function selectFrameFromSelection(selection: readonly SceneNode[]) {
+  let frame = null;
+  for (const selected_item of selection) {
+    if (selected_item.type === FRAME_TYPE_NAME) {
+      frame = selected_item;
+      break;
+    }
+  }
+  if (frame === null) {
+    for (const selected_item of selection){
+      frame = getFrameFromNode(selected_item);
+    }
+  }
+  return frame;
+}
+function getFrameFromNode(node: BaseNode|null) {
+  let frame = null;
+  if (node === null) return frame;
+  while (node.parent != null) {
+    if (node.type === FRAME_TYPE_NAME) {
+      frame = node;
+      break;
+    }
+    node = node.parent;
+  }
+  return frame;
+}
