@@ -1,5 +1,5 @@
 {
-  "name": "DojinMaker",
+  "name": "dojin-maker",
   "version": "1.0.0",
   "description": "Your Figma Plugin",
   "main": "code.js",
@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "watch": "npm run build -- --watch"
   },
-  "author": "",
+  "author": "Shing Chung Z. Chiu",
   "license": "",
   "devDependencies": {
     "@figma/plugin-typings": "*",

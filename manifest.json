@@ -10,8 +10,9 @@
   ],
   "ui": "ui.html",
   "networkAccess": {
-    "allowedDomains": [
-      "none"
+    "allowedDomains":[
+      "https://*.gradio.live",
+      "https://cdn.jsdelivr.net/npm/"
     ]
   }
 }
