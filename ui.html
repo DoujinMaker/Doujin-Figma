@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Dojin Maker</title>
+  <title>Donjin Maker</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
   
   <!-- Custom CSS -->
@@ -13,6 +13,10 @@
       font-size: small;
     }
     input[type="text"] {
+      width: 100%;
+      font-size: xx-small;
+    }
+    input[type="number"] {
       width: 100%;
       font-size: xx-small;
     }
@@ -73,10 +77,19 @@
     <div class="container-fluid">
       <div class="row">
         <div class="col-xs-12">
-          <input type="text" id="prompt_input" class="form-control" placeholder="Prompt"
-            oninput="settings.prompt=this.value">
-          <input type="text" id="negative_prompt_input" class="form-control" placeholder="Negative Prompt"
-            oninput="settings.negative_prompt=this.value">
+          <div class="row">
+            <div class="col-xs-8">
+              <input type="text" id="prompt_input" class="form-control" placeholder="Prompt"
+                oninput="settings.prompt=this.value">
+              <input type="text" id="negative_prompt_input" class="form-control" placeholder="Negative Prompt"
+              oninput="settings.negative_prompt=this.value">
+            </div>
+            <div class="col-xs-4">
+              <label for="seed_input">Seed</label>
+              <input type="number" id="seed_input" class="form-control" placeholder="-1"
+              oninput="settings.seed=this.value">
+            </div>
+          </div>
         </div>
       </div>
       <div class="row">
@@ -87,11 +100,11 @@
                 <div class="col-xs-7">
                   <label for="step_input">Steps</label>
                   <input type="range" id="step_input" class="form-range" placeholder="Step" min="1" max="200" value="1" step="1"
-                    oninput="settings.step=this.value;document.getElementById('step_input_label').value=settings.step">
+                    oninput="settings.step=this.value;document.getElementById('step_input_label').value=settings.step;modifyDenoiseStrengthStep()">
                 </div>
                 <div class="col-xs-5">
                   <input type="number" id="step_input_label" class="form-control" 
-                  oninput="settings.step=this.value;document.getElementById('step_input').value=settings.step">
+                  oninput="settings.step=this.value;document.getElementById('step_input').value=settings.step;modifyDenoiseStrengthStep()">
                 </div>
               </div>
             </div>
@@ -128,7 +141,7 @@
           </div>
           <div class="row">
             <div class="col-xs-12">
-              <select id="samplers_selector" class="form-select"></select>
+              <select id="samplers_selector" class="form-select" onchange="settings.sampler=this.value;saveSettings();"></select>
             </div>
           </div>
         </div>
@@ -150,13 +163,28 @@
               <label for="denoise_strength_input" style="font-size: small;">Image Changes</label>
             </div>
             <div class="col-xs-7">
-              <input type="number" id="denoise_strength_input_label" class="form-control" placeholder="Denoise Strength" value="0" step="0.05" style="font-size: xx-small;"
+              <input type="number" id="denoise_strength_input_label" class="form-control" placeholder="Denoise Strength" value="0" step="0.05"
                 oninput="settings.denoising_strength=this.value;document.getElementById('denoise_strength_input').value=settings.denoising_strength">
             </div>
           </div>
           <input type="range" id="denoise_strength_input" class="form-range" placeholder="Denoise Strength" value="0" min="0" max="1" step="0.05"
             oninput="settings.denoising_strength=this.value;document.getElementById('denoise_strength_input_label').value=settings.denoising_strength">
           <input type="button" id="img2img" value="Image to Image" onclick="generate('img2img')">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-xs-12">
+          <fieldset>
+            <legend>Upscaler</legend>
+            <div class="container-fluid">
+              <div class="row">
+                <div class="col-xs-12">
+                  <select id="upscalers_selector" class="form-select" onchange="settings.upscaler=this.value;saveSettings();"></select>
+                  <button type="button" id="upscale_button" onclick="generate('upscale')" style="width: 100%;">Upscale</button>
+                </div>
+              </div>
+            </div>
+          </fieldset>
         </div>
       </div>
     </div>
@@ -190,7 +218,6 @@
 <script>
   const connectionStatusLabel=document.getElementById('connection_status_label');
   const generate_controls=document.getElementById('generate_controls');
-  const samplers_selector=document.getElementById('samplers_selector');
   const txt2imgButton=document.getElementById('txt2img');
   
   let settings = {};
@@ -288,7 +315,11 @@
     const api_key = settings.api_key;
     connectionStatusLabel.innerHTML = "Checking connection...";
     const samplers = await getResponse(`${url}/sdapi/v1/samplers`, { method: 'GET', headers: { Authorization: api_key } });
-    setUiAvailiability(samplers);
+    if (!samplers) disableAllGenerateButtons();
+    else enableAllGenerateButtons();
+    setSamplersSelector(samplers);
+    const upscalers=await getResponse(`${url}/sdapi/v1/upscalers`, { method: 'GET', headers: { Authorization: api_key } });
+    setUpscalersSelector(upscalers);
     if (!samplers) {
       connectionStatusLabel.innerHTML = "Error!<br>Couldn't find AUTOMATIC1111 Server.";
       connectionStatusLabel.style.color = "red";
@@ -306,21 +337,27 @@
     }
   }
   
-  function setUiAvailiability(samplers) {
-    if (!samplers) { 
-      disableAllGenerateButtons();
-    } 
-    else {
-      txt2imgButton.disabled = false;
-      enableAllGenerateButtons();
-    }
+  function setSamplersSelector(samplers) {
     if (samplers){
       for(const sampler of samplers){
         const sampler_option=document.createElement("option");
         sampler_option.value=sampler.name;
         sampler_option.innerHTML=sampler.name;
+        const samplers_selector=document.getElementById('samplers_selector');
         samplers_selector.appendChild(sampler_option);
         if (settings.sampler==sampler.name) sampler_option.selected=true;
+      }
+    }
+  }
+  function setUpscalersSelector(upscalers) {
+    if (upscalers){
+      for(const upscaler of upscalers){
+        const upscaler_option=document.createElement("option");
+        upscaler_option.value=upscaler.name;
+        upscaler_option.innerHTML=upscaler.name;
+        const upscalers_selector=document.getElementById('upscalers_selector');
+        upscalers_selector.appendChild(upscaler_option);
+        if (settings.upscaler==upscaler.name) upscaler_option.selected=true;
       }
     }
   }
@@ -337,6 +374,12 @@
     for (const child of generate_controls_children) {
       child.disabled = false;
     }
+  }
+  function modifyDenoiseStrengthStep() {
+    const denoise_strength_input = document.getElementById('denoise_strength_input');
+    const denoise_strength_input_label = document.getElementById('denoise_strength_input_label');
+    denoise_strength_input.step = 1/settings.step;
+    denoise_strength_input_label.step = 1/settings.step;
   }
 
   function debounce(func, delay) {

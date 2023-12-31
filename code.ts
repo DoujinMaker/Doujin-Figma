@@ -2,6 +2,7 @@ figma.showUI(__html__, { width: 320, height: 720 });
 
 const FRAME_TYPE_NAME = "FRAME";
 const DEBUG_MODE = false;
+const DEFAULT_UPSCALE_SCALE=2
 
 class Cache{
   settings_version: string = Settings.latest_settings_version;
@@ -17,6 +18,7 @@ class Cache{
   batch_size: number = 1;
   denoising_strength: number = 0.5;
   large_image: boolean = false;
+  upscaler: string = "R-ESRGAN 4x+";
 }
 class Settings extends Cache{
   static latest_settings_version: string = "1.0.0";
@@ -101,6 +103,9 @@ const figmaUiMessageHandler=async (msg:any)=>{
       case "remove_background":
         await removeBackground();
         break;
+      case "upscale":
+        await upscale();
+        break;
     }
   }catch(e: any){
     if(debugMode())console.log(e)
@@ -140,11 +145,12 @@ function getFrameFromNode(node: BaseNode|null) {
   return frame;
 }
 async function txt2img(){
-  const frame=selectFrameFromSelection(figma.currentPage.selection);
-  if (!frame) {
-    figma.notify("Please select a frame or something that is within a frame to generate image");
-    return;
-  }
+  const frame=figma.createFrame();
+  frame.name=settings.prompt;
+  frame.resize(settings.target_length,settings.target_length);
+  frame.x=figma.viewport.center.x-frame.width/2;
+  frame.y=figma.viewport.center.y-frame.height/2;
+  frame.clipsContent=true;
   const optimistSize=getOptimistSize(frame);
   let query: any = {
     "prompt": settings.prompt,
@@ -164,7 +170,7 @@ async function txt2img(){
   const images=data['images'];
   for (const base64 of images) {
     const byte_array = await base64_to_Uint8Array(base64);
-    create_image_node("txt2image", byte_array,frame, frame.width, frame.height);
+    create_image_node("txt2image", byte_array,frame, settings.prompt, frame.width, frame.height);
   }
   figma.ui.postMessage({ type: 'generated' });
 }
@@ -196,7 +202,7 @@ async function img2img(){
   const images=data['images'];
   for (const base64 of images) {
     const byte_array = await base64_to_Uint8Array(base64);
-    create_image_node("txt2image", byte_array,frame, frame.width, frame.height);
+    create_image_node("img2img", byte_array,frame, settings.prompt, frame.width, frame.height);
   }
 }
 async function removeBackground(){
@@ -205,10 +211,34 @@ async function removeBackground(){
     figma.notify("Please select a frame or something that is within a frame to generate image");
     return;
   }
+  const newFrame=figma.createFrame();
+  newFrame.name=frame.name;
+  newFrame.resize(frame.width,frame.height);
+  newFrame.x=figma.viewport.center.x-newFrame.width/2;
+  newFrame.y=figma.viewport.center.y-newFrame.height/2;
+  newFrame.clipsContent=true;
   const base64_frame = await extract_base64(frame);
   const base64_rmbg = await get_auto_mask(base64_frame, false);
   const byte_array = await base64_to_Uint8Array(base64_rmbg);
-  create_image_node("auto_mask", byte_array,frame, frame.width, frame.height);
+  create_image_node("auto_mask", byte_array,newFrame ,"removed-background-of--"+frame.name, newFrame.width, newFrame.height);
+}
+async function upscale(){
+  const frame=selectFrameFromSelection(figma.currentPage.selection);
+  if (!frame) {
+    figma.notify("Please select a frame or something that is within a frame to generate image");
+    return;
+  }
+  const newFrame=figma.createFrame();
+  newFrame.name=frame.name;
+  newFrame.resize(frame.width*DEFAULT_UPSCALE_SCALE,frame.height*DEFAULT_UPSCALE_SCALE);
+  newFrame.x=figma.viewport.center.x-newFrame.width/2;
+  newFrame.y=figma.viewport.center.y-newFrame.height/2;
+  newFrame.clipsContent=true;
+  const base64_frame = await extract_base64(frame);
+  const base64_upscale = await upscale_image(base64_frame);
+  const byte_array = await base64_to_Uint8Array(base64_upscale);
+  create_image_node("upscale", byte_array,newFrame ,"upscaled--"+frame.name, newFrame.width, newFrame.height);
+
 }
 
 async function getJsonResponse(url: string, query: any) {
@@ -242,7 +272,25 @@ async function get_auto_mask(imageUrl: string, mask_only: boolean) {
   const base64 = data['mask'];
   return base64;
 }
-async function create_image_node(original_task: string, byte_array: Uint8Array,frame:FrameNode, width = -1, height = -1) {
+async function upscale_image(imageUrl: string) {
+  let query: any = {
+    "resize_mode": 0,
+    "show_extras_results": true,
+    "gfpgan_visibility": 0,
+    "codeformer_visibility": 0,
+    "codeformer_weight": 0,
+    "upscaling_resize": DEFAULT_UPSCALE_SCALE,
+    "upscaling_crop": true,
+    "upscaler_1": settings.upscaler,
+    "upscale_first": false,
+    "image": imageUrl
+  }
+  if(debugMode())console.log("Query",query);
+  let data = await getJsonResponse(`${settings.url}/sdapi/v1/extra-single-image`, query);
+  const base64 = data['image'];
+  return base64;
+}
+async function create_image_node(original_task: string, byte_array: Uint8Array,frame:FrameNode, image_name=settings.prompt, width = -1, height = -1) {
   const imageNode = figma.createRectangle();
   const image = await figma.createImage(byte_array);
   if (width === -1 || height === -1) { let size = await image.getSizeAsync(); width = size.width; height = size.height; }
@@ -254,7 +302,7 @@ async function create_image_node(original_task: string, byte_array: Uint8Array,f
       scaleMode: 'FILL'
     }
   ]
-  imageNode.name = settings.prompt;
+  imageNode.name = image_name;
   frame.appendChild(imageNode);
   figma.ui.postMessage({ original_task, type: 'generated' });
   figma.commitUndo();
