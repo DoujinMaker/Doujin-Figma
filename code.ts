@@ -19,6 +19,8 @@ class Cache{
   denoising_strength: number = 0.5;
   large_image: boolean = false;
   upscaler: string = "R-ESRGAN 4x+";
+  alpha_matting_foreground_threshold:number=120;
+  alpha_matting_background_threshold:number=10;
 }
 class Settings extends Cache{
   static latest_settings_version: string = "1.0.0";
