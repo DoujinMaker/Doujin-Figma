@@ -1,4 +1,4 @@
-# Doujin Maker - Make your own drawing with Stable Diffusion using Colab
+# Doujin Figma - A Figma Plugin that help you make your own drawing with Stable Diffusion using Colab
 
 Free and open source plugin for you to use Figma with Stable Diffusion.
 Made this plugin for my friends so that it is easier for them to draw their Dojin Manga.
@@ -7,8 +7,9 @@ While this plugin is easier to setup.
 
 - [x] Text to Image
 - [x] Image to Image
-- [x] Remove Background
 - [ ] Inpaint
+- [x] Remove Background
+- [ ] Segment Anything
 - [x] Support Colab
 - [ ] Support Localhost
 - [ ] Support Free to use Demo (No Localhost nor Colab needed)
