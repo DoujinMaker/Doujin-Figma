@@ -20,3 +20,7 @@ Open the following Colab Notebook
 Follow the instruction and run all the cells.
 Copy the generated URL at the very end of the Notebook and paste it onto the URL box on the very top of this plugin (Left side is URL, Right side is API keys).
 For faster generate speed, it is recommended to use Stable Diffusion Turbo.
+When you see the warning about Figma Extension, install the following plugin to your Stable Diffusion WebUi for full features if you want.
+[DoujinFigma-AUTOMATIC1111-Extension](https://github.com/zeuscsc/DoujinFigma-AUTOMATIC1111-Extension.git)
+Enjoy!
+Shing Chung Z. Chiu
