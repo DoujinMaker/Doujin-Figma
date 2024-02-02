@@ -12,14 +12,11 @@
   "networkAccess": {
     "allowedDomains":[
       "https://*.gradio.live",
-      "https://cdn.jsdelivr.net/npm/",
-      "http://localhost:7860",
-      "http://127.0.0.1:7860"
+      "https://cdn.jsdelivr.net/npm/"
     ],
-    "reasoning": "localhost is for user that have machine that can run on their own and know how to setup the environment.",
+    "reasoning": "",
     "devAllowedDomains": [
-      "http://localhost:7860",
-      "http://127.0.0.1:7860"
+      "http://localhost:7860"
     ]
   }
 }

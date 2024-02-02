@@ -194,7 +194,7 @@ async function img2img(){
     "negative_prompt": settings.negative_prompt,
     "steps": settings.step,
     "sampler_index": settings.sampler,
-    "cfg_scale": 7,
+    "cfg_scale": settings.cfg_scale,
     "width": optimistSize.width,
     "height": optimistSize.height,
     "seed": settings.seed,
