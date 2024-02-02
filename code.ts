@@ -105,6 +105,9 @@ const figmaUiMessageHandler=async (msg:any)=>{
       case "remove_background":
         await removeBackground();
         break;
+      case "get_background_mask":
+        await get_background_mask();
+        break
       case "upscale":
         await upscale();
         break;
@@ -222,7 +225,30 @@ async function removeBackground(){
   const base64_frame = await extract_base64(frame);
   const base64_rmbg = await get_auto_mask(base64_frame, false);
   const byte_array = await base64_to_Uint8Array(base64_rmbg);
-  create_image_node("auto_mask", byte_array,newFrame ,"removed-background-of--"+frame.name, newFrame.width, newFrame.height);
+  create_image_node("removeBackground", byte_array,newFrame ,"removed-background-of--"+frame.name, newFrame.width, newFrame.height);
+}
+async function get_background_mask(){
+  const frame=selectFrameFromSelection(figma.currentPage.selection);
+  if (!frame) {
+    figma.notify("Please select a frame or something that is within a frame to generate image");
+    return;
+  }
+  const base64_frame = await extract_base64(frame);
+  const base64_rmbg = await get_auto_mask(base64_frame, true);
+  const svgstr = await img2svg(base64_rmbg);
+  create_node_from_svg("get_background_mask", svgstr,frame ,"mask-of--"+frame.name, frame.width, frame.height);
+}
+function img2svg(base64:string){
+  return new Promise<string>((resolve) => {
+    function handleMessage(msg: any) {
+      if (msg.type === "img2svg_result") {
+        figma.ui.onmessage = figmaUiMessageHandler;
+        resolve(msg.svgstr);
+      }
+    }
+    figma.ui.onmessage = handleMessage;
+    figma.ui.postMessage({ type: "img2svg", base64 });
+  });
 }
 async function upscale(){
   const frame=selectFrameFromSelection(figma.currentPage.selection);
@@ -306,6 +332,15 @@ async function create_image_node(original_task: string, byte_array: Uint8Array,f
   ]
   imageNode.name = image_name;
   frame.appendChild(imageNode);
+  figma.ui.postMessage({ original_task, type: 'generated' });
+  figma.commitUndo();
+}
+async function create_node_from_svg(original_task: string, svgstr: string,frame:FrameNode, image_name=settings.prompt, width=-1, height=-1) {
+  const svgNode = figma.createNodeFromSvg(svgstr);
+  if (width === -1 || height === -1) { width = frame.width; height = frame.height; }
+  svgNode.resize(width, height);
+  svgNode.name = image_name;
+  frame.appendChild(svgNode);
   figma.ui.postMessage({ original_task, type: 'generated' });
   figma.commitUndo();
 }
